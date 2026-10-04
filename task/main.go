@@ -1,7 +1,7 @@
 package task
 
 import (
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 )
 
 func main() {
