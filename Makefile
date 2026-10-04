@@ -1,4 +1,7 @@
-.PHONY: vet test check
+.PHONY: build vet test check
+
+build:
+	go build ./...
 
 vet:
 	go vet ./...

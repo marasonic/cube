@@ -1,0 +1,11 @@
+# Build output
+bin/
+cube
+*.exe
+*.test
+*.out
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
