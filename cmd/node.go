@@ -28,11 +28,24 @@ The node command allows a user to get the information about the nodes in the clu
 		manager, _ := cmd.Flags().GetString("manager")
 
 		url := fmt.Sprintf("http://%s/nodes", manager)
-		resp, _ := http.Get(url)
+		resp, err := http.Get(url)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error contacting manager: %v\n", err)
+			os.Exit(1)
+		}
 		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error reading response: %v\n", err)
+			os.Exit(1)
+		}
+
 		var nodes []*node.Node
-		json.Unmarshal(body, &nodes)
+		if err := json.Unmarshal(body, &nodes); err != nil {
+			fmt.Fprintf(os.Stderr, "error decoding nodes: %v\n", err)
+			os.Exit(1)
+		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 5, ' ', tabwriter.TabIndent)
 		fmt.Fprintln(w, "NAME\tMEMORY (MiB)\tDISK (GiB)\tROLE\tTASKS\t")
 		for _, node := range nodes {
