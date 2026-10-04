@@ -1,13 +1,13 @@
 package store
 
 import (
-	"cube/task"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/boltdb/bolt"
+	"github.com/marasonic/cube/task"
 )
 
 type Store interface {
