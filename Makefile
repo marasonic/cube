@@ -1,7 +1,7 @@
 .PHONY: build vet test check
 
 build:
-	go build ./...
+	go build -o bin/cube .
 
 vet:
 	go vet ./...
