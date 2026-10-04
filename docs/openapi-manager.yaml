@@ -1,0 +1,180 @@
+openapi: 3.0.3
+info:
+  title: Cube Manager API
+  version: 0.1.0
+  description: HTTP API of the Cube manager, which accepts tasks and schedules them on workers.
+servers:
+  - url: http://localhost:5555
+    description: Default manager address (`--host`/`--port`)
+paths:
+  /tasks:
+    post:
+      summary: Submit a task event
+      description: The manager queues the event and schedules the task on a worker. Unknown JSON fields are rejected.
+      operationId: startTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskEvent'
+      responses:
+        '201':
+          description: Accepted. The body is the submitted task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Invalid JSON, or unknown fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List tasks
+      operationId: listTasks
+      responses:
+        '200':
+          description: All tasks known to the manager.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+  /tasks/{taskID}:
+    parameters:
+      - name: taskID
+        in: path
+        required: true
+        description: UUID of the task.
+        schema:
+          type: string
+          format: uuid
+    delete:
+      summary: Stop a task
+      description: The manager records a Completed event for the task, and the worker stops the container. The container may still be stopping when the response arrives.
+      operationId: stopTask
+      responses:
+        '204':
+          description: Stop request accepted.
+        '404':
+          description: No task with that ID. An ID that is not a valid UUID also returns 404.
+  /nodes:
+    get:
+      summary: List worker nodes
+      operationId: listNodes
+      responses:
+        '200':
+          description: Worker nodes known to the manager.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Node'
+components:
+  schemas:
+    TaskState:
+      type: integer
+      description: Task state. 0 Pending, 1 Scheduled, 2 Running, 3 Completed, 4 Failed.
+      enum: [0, 1, 2, 3, 4]
+    TaskEvent:
+      type: object
+      properties:
+        ID:
+          type: string
+          format: uuid
+        State:
+          $ref: '#/components/schemas/TaskState'
+        Timestamp:
+          type: string
+          format: date-time
+        Task:
+          $ref: '#/components/schemas/Task'
+    Task:
+      type: object
+      properties:
+        ID:
+          type: string
+          format: uuid
+        ContainerID:
+          type: string
+        Name:
+          type: string
+        State:
+          $ref: '#/components/schemas/TaskState'
+        RestartCount:
+          type: integer
+        Image:
+          type: string
+        HealthCheck:
+          type: string
+        Cpu:
+          type: number
+          description: CPU share, in cores.
+        Memory:
+          type: integer
+          format: int64
+          description: Memory in MiB.
+        Disk:
+          type: integer
+          format: int64
+          description: Disk in GiB.
+        ExposedPorts:
+          type: object
+          description: Map of port (for example `80/tcp`) to an empty object.
+          additionalProperties: true
+        HostPorts:
+          type: object
+          additionalProperties: true
+        PortBindings:
+          type: object
+          additionalProperties:
+            type: string
+        RestartPolicy:
+          type: string
+          enum: [always, unless-stopped, on-failure, '']
+        StartTime:
+          type: string
+          format: date-time
+        FinishTime:
+          type: string
+          format: date-time
+    Node:
+      type: object
+      properties:
+        Name:
+          type: string
+        Ip:
+          type: string
+        Api:
+          type: string
+          description: Base URL of the worker's API.
+        Memory:
+          type: integer
+          format: int64
+        MemoryAllocated:
+          type: integer
+          format: int64
+        Disk:
+          type: integer
+          format: int64
+        DiskAllocated:
+          type: integer
+          format: int64
+        Stats:
+          type: object
+          additionalProperties: true
+        Role:
+          type: string
+        TaskCount:
+          type: integer
+    ErrorResponse:
+      type: object
+      properties:
+        HTTPStatusCode:
+          type: integer
+        Message:
+          type: string
