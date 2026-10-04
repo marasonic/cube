@@ -3,9 +3,9 @@ package scheduler
 import (
 	"testing"
 
+	"github.com/c9s/goprocinfo/linux"
 	"github.com/marasonic/cube/node"
 	"github.com/marasonic/cube/task"
-	"github.com/marasonic/cube/utils"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -128,94 +128,36 @@ func TestRoundRobinSchedulerPickBestNode(t *testing.T) {
 	}
 }
 
-// Tests for Greedy scheduler
-
-//var nodeList = []*node.Node{
-//	&node.Node{Name: "test-node-1", Memory: 33554432, MemoryAllocated: 8388608, Disk: 524288000, DiskAllocated: 104857600},
-//	&node.Node{Name: "test-node-2", Memory: 33554432, MemoryAllocated: 16777216, Disk: 524288000, DiskAllocated: 262144000},
-//	&node.Node{Name: "test-node-3", Memory: 33554432, MemoryAllocated: 30408704, Disk: 524288000, DiskAllocated: 262144000},
-//}
-
-func TestGreedySchedulerScoreCandidateNodes(t *testing.T) {
-	//tests := []struct {
-	//	name     string
-	//	mockFunc func()
-	//	task     task.Task
-	//	want     map[string]float64
-	//}{
-	//	{
-	//		name: "first test",
-	//		mockFunc: func() {
-	//			getNodeStats = func(n *node.Node) *stats.Stats {
-	//				node1Stats := *utils.GetStats(32760, 25600, 4194304, 2097152, 1766, 1, 1134, 15638, 926, 0, 19, 0, 0, 0)
-	//				node1 := node.NewNode("node1:3333", "", "worker")
-	//				node1.Stats = node1Stats
-
-	//				node2Stats := *utils.GetStats(32760, 25600, 4194304, 2097152, 14696006, 1552, 2834048, 827414099, 72770, 0, 19876, 0, 0, 0)
-	//				node2 := node.NewNode("node2:3333", "", "worker")
-	//				node2.Stats = node2Stats
-
-	//				node3Stats := *utils.GetStats(32760, 25600, 4194304, 2097152, 14696006, 1552, 2834048, 827414099, 72770, 0, 19876, 0, 0, 0)
-	//				node3 := node.NewNode("node3:3333", "", "worker")
-	//				node3.Stats = node3Stats
-
-	//				return &stats.Stats{}
-	//			}
-	//		},
-	//		task: task.Task{Memory: 512, Disk: 1024},
-	//		want: map[string]float64{
-	//			"test-node-1": 1.0,
-	//			"test-node-2": 1.0,
-	//			"test-node-3": 1.0,
-	//		},
-	//	},
-	//}
-
-	//origalGetNodeStats := getNodeStats
-
-	//for _, test := range tests {
-	//	t.Run(test.name, func(t *testing.T) {
-	//		test.mockFunc()
-	//		gs := Greedy{Name: "greedy-scheduler"}
-	//		got := gs.Score(test.task, nodeList)
-	//		if !cmp.Equal(got, nodeList) {
-	//			t.Errorf("-want/+got: \n%s", cmp.Diff(nodeList, got))
-	//		}
-	//	})
-	//diskTotal int, diskFree int, memTotal int, memUsed int, user uint64, nice uint64, sys uint64, idle uint64, iowait uint64, irq uint64, softirq uint64, steal uint64, guest uint64, guest_nice uint64//}
-	//                            dT     dF     mT       mU      user  n  s     i      iow  irq sirq steal g gN
-	node1Stats := *utils.GetStats(32760, 25600, 4194304, 307200, 1766, 1, 1134, 15638, 926, 0, 19, 0, 0, 0)
-	node2Stats := *utils.GetStats(32760, 25600, 4194304, 2097152, 14696006, 1552, 2834048, 827414099, 72770, 0, 19876, 0, 0, 0)
-	node3Stats := *utils.GetStats(32760, 25600, 4194304, 1048576, 14696006, 1552, 2834048, 827414099, 72770, 0, 19876, 0, 0, 0)
-
-	ts1 := utils.CreateTestServer(node1Stats)
-	ts2 := utils.CreateTestServer(node2Stats)
-	ts3 := utils.CreateTestServer(node3Stats)
-
-	node1 := node.Node{Name: "test-node-1", Api: ts1.URL}
-	node2 := node.Node{Name: "test-node-2", Api: ts2.URL}
-	node3 := node.Node{Name: "test-node-3", Api: ts3.URL}
-
-	tt := task.Task{Memory: 512, Disk: 1024}
-
-	want := map[string]float64{
-		"test-node-1": 0.1,
-		"test-node-2": 0.5,
-		"test-node-3": 0.6,
+func TestCPUUsageFromSnapshots(t *testing.T) {
+	tests := []struct {
+		name   string
+		before linux.CPUStat
+		after  linux.CPUStat
+		want   float64
+	}{
+		{
+			name:   "half busy",
+			before: linux.CPUStat{User: 100, Idle: 900},
+			after:  linux.CPUStat{User: 150, Idle: 950},
+			want:   0.5,
+		},
+		{
+			name:   "no counter change",
+			before: linux.CPUStat{User: 100, Idle: 900},
+			after:  linux.CPUStat{User: 100, Idle: 900},
+			want:   0,
+		},
 	}
 
-	gs := Greedy{Name: "greedy-scheduler"}
-	got := gs.Score(tt, []*node.Node{&node1, &node2, &node3})
-
-	if !cmp.Equal(got, want) {
-		t.Errorf("-want, +got \n%s", cmp.Diff(want, got))
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := cpuUsageFromSnapshots(test.before, test.after)
+			if got != test.want {
+				t.Errorf("cpuUsageFromSnapshots() = %v, want %v", got, test.want)
+			}
+		})
 	}
 }
-func TestGreeySchedulerPickBestNode(t *testing.T) {}
-
-// Tests for E-PVM scheduler
-func TestEpvmSchedulerScoreCandidateNodes(t *testing.T) {}
-func TestEpvmSchedulerPickBestNode(t *testing.T)        {}
 
 func TestCheckTaskDisk(t *testing.T) {
 	tt := task.Task{Disk: 4096}
