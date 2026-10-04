@@ -16,9 +16,9 @@ import (
 	"github.com/marasonic/cube/task"
 	"github.com/marasonic/cube/worker"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/golang-collections/collections/queue"
 	"github.com/google/uuid"
+	"github.com/moby/moby/api/types/network"
 )
 
 type Manager struct {
@@ -255,7 +255,7 @@ func (m *Manager) restartTask(t *task.Task) {
 	log.Printf("[manager] response from worker: %#v\n", t)
 }
 
-func getHostPort(ports nat.PortMap) *string {
+func getHostPort(ports network.PortMap) *string {
 	for k, _ := range ports {
 		return &ports[k][0].HostPort
 	}

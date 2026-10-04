@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 )
 
@@ -28,7 +29,7 @@ type Task struct {
 	Memory        int64
 	Disk          int64
 	ExposedPorts  nat.PortSet
-	HostPorts     nat.PortMap
+	HostPorts     network.PortMap
 	PortBindings  map[string]string
 	RestartPolicy string
 	StartTime     time.Time
@@ -102,6 +103,22 @@ type DockerResult struct {
 	Result      string
 }
 
+type DockerInspectResponse struct {
+	Error     error
+	Container *container.InspectResponse
+}
+
+func (d *Docker) Inspect(id string) DockerInspectResponse {
+	ctx := context.Background()
+	result, err := d.Client.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
+	if err != nil {
+		log.Printf("Error inspecting container %s: %v\n", id, err)
+		return DockerInspectResponse{Error: err}
+	}
+
+	return DockerInspectResponse{Container: &result.Container}
+}
+
 func (d *Docker) Run() DockerResult {
 	ctx := context.Background()
 	reader, err := d.Client.ImagePull(ctx, d.Config.Image, client.ImagePullOptions{})
@@ -112,7 +129,7 @@ func (d *Docker) Run() DockerResult {
 	io.Copy(os.Stdout, reader)
 
 	rp := container.RestartPolicy{
-		Name: d.Config.RestartPolicy,
+		Name: container.RestartPolicyMode(d.Config.RestartPolicy),
 	}
 
 	r := container.Resources{
@@ -126,12 +143,29 @@ func (d *Docker) Run() DockerResult {
 		PublishAllPorts: true,
 	}
 
-	resp, err := d.Client.ContainerCreate(ctx, &container.Config{
+	exposedPorts := make(network.PortSet, len(d.Config.ExposedPorts))
+	for port := range d.Config.ExposedPorts {
+		parsedPort, err := network.ParsePort(string(port))
+		if err != nil {
+			log.Printf("Error parsing exposed port %s: %v\n", port, err)
+			return DockerResult{Error: err}
+		}
+		exposedPorts[parsedPort] = struct{}{}
+	}
+
+	config := &container.Config{
 		Image:        d.Config.Image,
 		Tty:          false,
 		Env:          d.Config.Env,
-		ExposedPorts: d.Config.ExposedPorts,
-	}, &hc, nil, nil, d.Config.Name)
+		ExposedPorts: exposedPorts,
+	}
+	createOptions := client.ContainerCreateOptions{
+		Config:     config,
+		HostConfig: &hc,
+		Name:       d.Config.Name,
+	}
+
+	resp, err := d.Client.ContainerCreate(ctx, createOptions)
 	if err != nil {
 		log.Printf("Error creating container using image %s: %v\n", d.Config.Image, err)
 		return DockerResult{Error: err}
@@ -162,7 +196,13 @@ func (d *Docker) Stop(id string) DockerResult {
 		return DockerResult{Error: err}
 	}
 
-	_, err = d.Client.ContainerRemove(ctx, id, client.ContainerRemoveOptions{
+	return DockerResult{Action: "stop", Result: "success"}
+}
+
+func (d *Docker) Remove(id string) DockerResult {
+	log.Printf("Attempting to remove container %v", id)
+	ctx := context.Background()
+	_, err := d.Client.ContainerRemove(ctx, id, client.ContainerRemoveOptions{
 		RemoveVolumes: true,
 		RemoveLinks:   false,
 		Force:         false,
@@ -172,5 +212,5 @@ func (d *Docker) Stop(id string) DockerResult {
 		return DockerResult{Error: err}
 	}
 
-	return DockerResult{Action: "stop", Result: "success", Error: nil}
+	return DockerResult{Action: "remove", Result: "success"}
 }

@@ -212,6 +212,7 @@ func (w *Worker) updateTasks() {
 				log.Printf("No container for running task %s", t.ID)
 				t.State = task.Failed
 				w.Db.Put(t.ID.String(), t)
+				continue
 			}
 
 			if resp.Container.State.Status == "exited" {
@@ -221,7 +222,9 @@ func (w *Worker) updateTasks() {
 			}
 
 			// task is running, update exposed ports
-			t.HostPorts = resp.Container.NetworkSettings.NetworkSettingsBase.Ports
+			if resp.Container.NetworkSettings != nil {
+				t.HostPorts = resp.Container.NetworkSettings.Ports
+			}
 			w.Db.Put(t.ID.String(), t)
 		}
 	}
