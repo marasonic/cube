@@ -21,11 +21,14 @@ type Task struct {
 	ContainerID   string
 	Name          string
 	State         State
+	RestartCount  int
 	Image         string
+	HealthCheck   string
 	Cpu           float64
 	Memory        int64
 	Disk          int64
 	ExposedPorts  nat.PortSet
+	HostPorts     nat.PortMap
 	PortBindings  map[string]string
 	RestartPolicy string
 	StartTime     time.Time
