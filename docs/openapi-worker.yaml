@@ -1,0 +1,182 @@
+openapi: 3.0.3
+info:
+  title: Cube Worker API
+  version: 0.1.0
+  description: HTTP API of a Cube worker, which runs task containers on its host.
+servers:
+  - url: http://localhost:5556
+    description: Default worker address (`--host`/`--port`)
+paths:
+  /tasks:
+    post:
+      summary: Start a task
+      description: The worker stores the task and starts its container. Unknown JSON fields are accepted and ignored.
+      operationId: startTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskEvent'
+      responses:
+        '201':
+          description: Accepted. The body is the submitted task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Invalid JSON.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List tasks
+      operationId: listTasks
+      responses:
+        '200':
+          description: All tasks on this worker.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+  /tasks/{taskID}:
+    parameters:
+      - name: taskID
+        in: path
+        required: true
+        description: UUID of the task.
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Inspect a task's container
+      description: Returns the Docker container inspect output for the task.
+      operationId: inspectTask
+      responses:
+        '200':
+          description: Docker container inspect output.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: No task with that ID. An ID that is not a valid UUID also returns 404.
+    delete:
+      summary: Stop a task
+      description: >-
+        Marks a copy of the task as Completed and queues it, which stops its container.
+        Known bug: when no task with this ID exists, the server panics and closes the
+        connection instead of returning 404.
+      operationId: stopTask
+      responses:
+        '204':
+          description: Stop request accepted.
+  /stats:
+    get:
+      summary: Get worker statistics
+      description: Returns memory, disk, CPU, and load statistics, plus the number of tasks.
+      operationId: getStats
+      responses:
+        '200':
+          description: Worker statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stats'
+components:
+  schemas:
+    TaskState:
+      type: integer
+      description: Task state. 0 Pending, 1 Scheduled, 2 Running, 3 Completed, 4 Failed.
+      enum: [0, 1, 2, 3, 4]
+    TaskEvent:
+      type: object
+      properties:
+        ID:
+          type: string
+          format: uuid
+        State:
+          $ref: '#/components/schemas/TaskState'
+        Timestamp:
+          type: string
+          format: date-time
+        Task:
+          $ref: '#/components/schemas/Task'
+    Task:
+      type: object
+      properties:
+        ID:
+          type: string
+          format: uuid
+        ContainerID:
+          type: string
+        Name:
+          type: string
+        State:
+          $ref: '#/components/schemas/TaskState'
+        RestartCount:
+          type: integer
+        Image:
+          type: string
+        HealthCheck:
+          type: string
+        Cpu:
+          type: number
+          description: CPU share, in cores.
+        Memory:
+          type: integer
+          format: int64
+          description: Memory in MiB.
+        Disk:
+          type: integer
+          format: int64
+          description: Disk in GiB.
+        ExposedPorts:
+          type: object
+          additionalProperties: true
+        HostPorts:
+          type: object
+          additionalProperties: true
+        PortBindings:
+          type: object
+          additionalProperties:
+            type: string
+        RestartPolicy:
+          type: string
+          enum: [always, unless-stopped, on-failure, '']
+        StartTime:
+          type: string
+          format: date-time
+        FinishTime:
+          type: string
+          format: date-time
+    Stats:
+      type: object
+      description: Host statistics. The nested objects come from the Linux system-stats package and are not described in detail here.
+      properties:
+        MemStats:
+          type: object
+          additionalProperties: true
+        DiskStats:
+          type: object
+          additionalProperties: true
+        CpuStats:
+          type: object
+          additionalProperties: true
+        LoadStats:
+          type: object
+          additionalProperties: true
+        TaskCount:
+          type: integer
+    ErrorResponse:
+      type: object
+      properties:
+        HTTPStatusCode:
+          type: integer
+        Message:
+          type: string
