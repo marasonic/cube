@@ -5,6 +5,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/c9s/goprocinfo/linux"
 	"github.com/marasonic/cube/node"
 	"github.com/marasonic/cube/task"
 )
@@ -205,25 +206,23 @@ func calculateCpuUsage(node *node.Node) (*float64, error) {
 		return nil, err
 	}
 
-	stat1Idle := stat1.CpuStats.Idle + stat1.CpuStats.IOWait
-	stat2Idle := stat2.CpuStats.Idle + stat2.CpuStats.IOWait
-
-	stat1NonIdle := stat1.CpuStats.User + stat1.CpuStats.Nice + stat1.CpuStats.System + stat1.CpuStats.IRQ + stat1.CpuStats.SoftIRQ + stat1.CpuStats.Steal
-	stat2NonIdle := stat2.CpuStats.User + stat2.CpuStats.Nice + stat2.CpuStats.System + stat2.CpuStats.IRQ + stat2.CpuStats.SoftIRQ + stat2.CpuStats.Steal
-
-	stat1Total := stat1Idle + stat1NonIdle
-	stat2Total := stat2Idle + stat2NonIdle
-
-	total := stat2Total - stat1Total
-	idle := stat2Idle - stat1Idle
-
-	var cpuPercentUsage float64
-	if total == 0 && idle == 0 {
-		cpuPercentUsage = 0.00
-	} else {
-		cpuPercentUsage = (float64(total) - float64(idle)) / float64(total)
-	}
+	cpuPercentUsage := cpuUsageFromSnapshots(*stat1.CpuStats, *stat2.CpuStats)
 	return &cpuPercentUsage, nil
+}
+
+func cpuUsageFromSnapshots(before, after linux.CPUStat) float64 {
+	beforeIdle := before.Idle + before.IOWait
+	afterIdle := after.Idle + after.IOWait
+	beforeNonIdle := before.User + before.Nice + before.System + before.IRQ + before.SoftIRQ + before.Steal
+	afterNonIdle := after.User + after.Nice + after.System + after.IRQ + after.SoftIRQ + after.Steal
+
+	total := afterIdle + afterNonIdle - beforeIdle - beforeNonIdle
+	idle := afterIdle - beforeIdle
+	if total == 0 {
+		return 0
+	}
+
+	return (float64(total) - float64(idle)) / float64(total)
 }
 
 //func getNodeStats(node *node.Node) *stats.Stats {
